@@ -10,7 +10,7 @@ def print42() {
   log(42)
 }
 
-# Checks if the print leet or 42
+// Checks if the print leet or 42
 
 if (true) {
   printLeet()

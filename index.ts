@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-const regex = /({|}|\/\*|\*\/|#|\n|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
+const regex = /({|}|\/\*|\*\/|\/\/|\n|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
 
 interface Memory {
   keywords: Function[],
@@ -144,6 +144,7 @@ class Niklas {
       return (fun as NativeFunctionVariable).value.body(params)
     }
     const niklas = new Niklas()
+    niklas.parent = this
     niklas.tokens = fun.value.body as []
     return niklas.execute(true)
   }
@@ -360,7 +361,7 @@ class Niklas {
       }
       return true
     }
-    if (this.peek() === '#') {
+    if (this.peek() === '//') {
       while (this.tokens.length) {
         if (this.get() === '\n') {
           break
