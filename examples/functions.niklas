@@ -1,19 +1,14 @@
 /*
- * Functions in Niklas
+ * Multiplies two numbers.
  */
-
-def printLeet() {
-  log(1337)
+def multiply (param1: number, param2: number): number {
+  val result = param1 * param2
+  log(param1, param2, result)
+  return result
 }
 
-def print42() {
-  log(42)
-}
-
-// Checks if the print leet or 42
-
-if (true) {
-  printLeet()
-} else {
-  print42()
-}
+// Test some multiplications
+assert multiply(9,9) == 81
+assert multiply(5,5) == 25
+assert multiply(32,32) == 1024
+assert multiply(112, 69) == 112*69

@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-const regex = /({|}|\/\*|\*\/|\/\/|\n|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
+const regex = /({|}|\/\*|\*\/|\/\/.*|\n|:|==|=|\*|\/|%|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
+
+type VariableType = ('any'|'number'|'string'|'function')
 
 interface Memory {
   keywords: Function[],
@@ -31,7 +33,7 @@ interface Memory {
 
 interface Variable {
   final: boolean,
-  type: 'any' | 'function'
+  type: VariableType
   value: any
 }
 
@@ -39,14 +41,16 @@ interface FunctionVariable extends Variable {
   native: boolean
   type: 'function',
   value: {
-    parameters: [],
+    parameters: any[],
+    returnType: VariableType
     body: [] | Function
   }
 }
 
 interface NativeFunctionVariable extends FunctionVariable {
   value: {
-    parameters: []
+    parameters: any[]
+    returnType: VariableType
     body: Function
   }
 }
@@ -94,7 +98,7 @@ class Niklas {
       },
       keywords: [
         this.handleComment,
-        this.isAssertKeyword,
+        this.handleAssert,
         this.isVariableKeyword,
         this.handleFunctionDeclaration,
         this.isConditionalKeyword,
@@ -131,13 +135,22 @@ class Niklas {
         this.get()
         break
       }
-      if (this.peek() === ',') {
-        this.get()
-      }
       const expression = this.evaluate()
       params.push(expression)
-      if (this.peek() !== ',' && this.peek() !== ')') {
-        throw new Error('Params must be separated with comma')
+      if (this.peek() === ',') {
+        this.get()
+      } else if (this.peek() !== ')') {
+        throw new Error('Function parameters must be separated by comma')
+      }
+    }
+    for (let i = 0; i < fun.value.parameters.length; i++) {
+      const param = fun.value.parameters[i] as any
+      if (!params[i]) {
+        throw new Error('Parameter ' + param.name + ' is missing!')
+      }
+      const type = typeof params[i]
+      if (param.type && param.type !== 'any' && type !== param.type) {
+        throw new Error('Parameter ' + param.name + ' must be of type ' + param.type + ', but was ' + type)
       }
     }
     if (fun.native) {
@@ -145,22 +158,29 @@ class Niklas {
     }
     const niklas = new Niklas()
     niklas.parent = this
-    niklas.tokens = fun.value.body as []
+    niklas.tokens = [...fun.value.body as any]
+    for (let i = 0; i < params.length; i++) {
+      niklas.addVariable(true, fun.value.parameters[i].name, fun.value.parameters[i].type, params[i])
+    }
     return niklas.execute(true)
   }
 
   /* Execution */
 
   public run (source: String) {
-    this.tokens = source.split(regex).filter(token => token.match(/\n/g) ? true : token.trim())
+    this.tokens = source.split(regex).filter(token => token.trim())
     this.execute(true)
   }
 
-  private execute (fail = false) {
+  private execute (fail = false): any {
     while (this.tokens.length) {
       let found = false
       if (this.peek() === '}') {
         break
+      }
+      if (this.peek() === 'return') {
+        this.get()
+        return this.evaluate()
       }
       for (let i = 0; i < this.memory.keywords.length; i++) {
         if (this.memory.keywords[i].call(this)) {
@@ -261,7 +281,8 @@ class Niklas {
         throw new Error('Unknown variable ' + name)
       }
       if (variable.type === 'function') {
-        return this.callFunction(variable as FunctionVariable)
+        const result = this.callFunction(variable as FunctionVariable)
+        return result
       }
       return variable.value
     }
@@ -269,7 +290,20 @@ class Niklas {
   }
 
   private getExpression (): any {
-    return this.getFactor()
+    const left = this.getFactor()
+    if (this.peek() === '*') {
+      this.get()
+      return left * this.getExpression()
+    }
+    if (this.peek() === '/') {
+      this.get()
+      return left / this.getExpression()
+    }
+    if (this.peek() === '%') {
+      this.get()
+      return left % this.getExpression()
+    }
+    return left
   }
 
   private evaluateSimpleExpression (): any {
@@ -289,43 +323,7 @@ class Niklas {
     return left
   }
 
-  /*
-  private evaluateExpression (): boolean {
-    if (this.peek() === '(') {
-      this.get()
-    }
-    const left = this.evaluateSimpleExpression()
-    let value;
-    switch (this.peek()) {
-      case '&':
-      case '&&':
-        this.get()
-        value = left && this.evaluateExpression()
-        break
-      case '|':
-      case '||':
-        this.get()
-        value = left || this.evaluateExpression()
-        break
-      default:
-        return left
-    }
-    if (this.peek() === ')') {
-      this.get()
-      if (this.peek() === '&&') {
-        this.get()
-        return value && this.evaluateExpression()
-      }
-      if (this.peek() === '||') {
-        this.get()
-        return value || this.evaluateExpression()
-      }
-    }
-    return value
-  }
- */
-
-  private evaluate (): boolean {
+  private evaluate (): any {
     let value;
     if (this.peek() === '(') {
       this.get()
@@ -361,11 +359,18 @@ class Niklas {
       }
       return true
     }
-    if (this.peek() === '//') {
-      while (this.tokens.length) {
-        if (this.get() === '\n') {
-          break
-        }
+    if (this.peek().startsWith('//')) {
+      this.get()
+      return true
+    }
+  }
+
+  private handleAssert () {
+    if (this.peek() === 'assert') {
+      this.get()
+      const condition = this.evaluate()
+      if (!condition) {
+        throw new Error('Assertion failed')
       }
       return true
     }
@@ -378,11 +383,8 @@ class Niklas {
       if (this.get() !== '=') {
         throw new Error('Variable declaration is missing \'=\'')
       }
-      if (this.isNumber()) {
-        this.addVariable(final, name, 'number', Number(this.get()))
-        return true
-      }
-      this.addVariable(final, name, 'any', this.evaluate())
+      const eval2 = this.evaluate()
+      this.addVariable(final, name, 'any', eval2)
       return true
     }
   }
@@ -391,21 +393,43 @@ class Niklas {
     if (this.peek() === 'def') {
       this.get()
       const name = this.get();
+      let returnType = 'any'
+      const params = []
       if (this.get() !== '(') {
         throw new Error('Function parameter list must start with parentheses')
       }
-      while (true) {
+      while (this.tokens.length) {
         if (this.peek() === ')') {
           this.get()
           break
         }
+        const name = this.get()
+        let type = 'any'
+        if (this.peek() === ':') {
+          this.get()
+          type = this.get()
+        }
+        params.push({
+          name: name,
+          type: type
+        })
+        if (this.peek() === ',') {
+          this.get()
+        } else if (this.peek() !== ')') {
+          throw new Error('Function parameters must be separated by comma')
+        }
+      }
+      if (this.peek() === ':') {
+        this.get()
+        returnType = this.get()
       }
       if (this.get() !== '{') {
         throw new Error('Function body must start with a brace')
       }
       const tokens = this.collectBlock()
       this.addVariable(true, name, 'function', {
-        parameters: [],
+        parameters: params,
+        returnType: returnType,
         body: tokens
       })
       return true
@@ -455,16 +479,6 @@ class Niklas {
         this.skipBlock()
       }
       return true
-    }
-  }
-
-  private isAssertKeyword () {
-    if (this.peek() === 'assert') {
-      this.get()
-      const condition = this.evaluate()
-      if (!condition) {
-        throw new Error('Assertion failed')
-      }
     }
   }
 
