@@ -1,0 +1,13 @@
+def printLeet() {
+  log(1337)
+}
+
+def print42() {
+  log(42)
+}
+
+if (true) {
+  printLeet()
+} else {
+  print42()
+}

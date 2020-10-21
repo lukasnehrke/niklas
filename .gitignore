@@ -1,0 +1,17 @@
+.DS_Store
+node_modules
+
+.tmp
+*.local
+*.log
+
+.idea
+.vscode
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+lib

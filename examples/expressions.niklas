@@ -1,0 +1,11 @@
+val x = 17
+val y = 42
+val bool = true
+
+log(x == y)
+log(((x == y)) || x == 17)
+log(bool)
+log(!(bool && bool))
+
+log(x)
+log(-x)
