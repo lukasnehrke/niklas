@@ -1,4 +1,28 @@
-const regex = /({|}|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
+/*
+ * This file is part of Niklas, licensed under the MIT License (MIT).
+ *
+ * Copyright (c) 2020 Lukas Nehrke
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+const regex = /({|}|\/\*|\*\/|#|\n|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
 
 interface Memory {
   keywords: Function[],
@@ -69,6 +93,7 @@ class Niklas {
         }
       },
       keywords: [
+        this.handleComment,
         this.isAssertKeyword,
         this.isVariableKeyword,
         this.handleFunctionDeclaration,
@@ -126,7 +151,7 @@ class Niklas {
   /* Execution */
 
   public run (source: String) {
-    this.tokens = source.replace(/\r?\n|\r/g, ' ').split(regex).filter(function (s) { return !s.match(/^\s*$/); });
+    this.tokens = source.split(regex).filter(token => token.match(/\n/g) ? true : token.trim())
     this.execute(true)
   }
 
@@ -308,9 +333,7 @@ class Niklas {
         this.get()
       }
     } else {
-      console.log('Evaluating ' + this.tokens[0] + this.tokens[1] + this.tokens[2])
       value = this.evaluateSimpleExpression()
-      console.log('Result: ' + value)
     }
     if (this.peek() === '&&') {
       this.get()
@@ -322,7 +345,30 @@ class Niklas {
     return value
   }
 
-  /* Keywords */
+  /* Handlers */
+
+  private handleComment () {
+    if (this.peek() === '\n') {
+      this.get()
+      return true
+    }
+    if (this.peek() === '/*') {
+      while (this.tokens.length) {
+        if (this.get() === '*/') {
+          break
+        }
+      }
+      return true
+    }
+    if (this.peek() === '#') {
+      while (this.tokens.length) {
+        if (this.get() === '\n') {
+          break
+        }
+      }
+      return true
+    }
+  }
 
   private isVariableKeyword () {
     if (['var', 'val'].includes(this.peek())) {
@@ -371,11 +417,9 @@ class Niklas {
       while (true) {
         const condition = this.evaluate()
         if (condition) {
-          console.log('Inside condition')
           if (this.get() !== '{') {
             throw new Error('If-Block must begin with a brace {')
           }
-          console.log(this.tokens)
           const niklas = new Niklas()
           niklas.parent = this
           //niklas.tokens = this.collectBlock()

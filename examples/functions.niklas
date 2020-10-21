@@ -1,3 +1,7 @@
+/*
+ * Functions in Niklas
+ */
+
 def printLeet() {
   log(1337)
 }
@@ -5,6 +9,8 @@ def printLeet() {
 def print42() {
   log(42)
 }
+
+# Checks if the print leet or 42
 
 if (true) {
   printLeet()
