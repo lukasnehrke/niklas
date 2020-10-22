@@ -24,7 +24,7 @@
 
 import {createTransformer} from "ts-jest";
 
-const regex = /({|}|\/\*|\*\/|\/\/.*|\n|:|<|==|\+\+|--|\+|-|=|\*|\/|%|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
+const regex = /({|}|\/\*|\*\/|\/\/.*|".*"|\n|:|<|==|\+\+|--|\+|-|=|\*|\/|%|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
 
 type VariableType = (null|'number'|'string'|'function')
 
@@ -172,6 +172,7 @@ class Niklas {
 
   public run (source: String) {
     this.tokens = source.split(regex).filter(token => token.trim())
+    console.log(JSON.stringify(this.tokens, null, 2))
     return this.execute()
   }
 
@@ -589,6 +590,10 @@ class Niklas {
         throw new Error('A parenthese is not closed')
       }
       return result
+    }
+    if (this.peek(tokens).startsWith('"')) {
+      const str = this.get(tokens)
+      return str.substr(1, str.length - 2)
     }
     if (['true', 'false'].includes(this.peek(tokens))) {
       return this.get(tokens) === 'true'
