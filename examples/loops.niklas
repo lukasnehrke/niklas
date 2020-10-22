@@ -4,9 +4,19 @@ repeat (3) {
   println(123)
 }
 
-var x = 0
-while (x < 5) {
-  x++
+var z = 2
+while (z < 5) {
+  z++
 }
 
-println(x)
+from 0 to 10 with x {
+  from 0 to 10 with y {
+    // println(x, y)
+  }
+}
+
+val two = 2
+
+from 0 to two {
+  println(2)
+}

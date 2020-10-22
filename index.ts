@@ -24,7 +24,7 @@
 
 const regex = /({|}|\/\*|\*\/|\/\/.*|\n|:|<|==|\+\+|=|\*|\/|%|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
 
-type VariableType = ('any'|'number'|'string'|'function')
+type VariableType = (null|'number'|'string'|'function')
 
 interface Memory {
   keywords: Function[],
@@ -99,6 +99,7 @@ class Niklas {
         this.handleAssert,
         this.handleRepeat,
         this.handleWhile,
+        this.handleFromTo,
         this.isConditionalKeyword,
         this.isVariableKeyword,
         this.handleFunctionDeclaration,
@@ -231,9 +232,8 @@ class Niklas {
         blocks++
       } else if (token === '}') {
         blocks--
-      } else {
-        tokens.push(token)
       }
+      tokens.push(token)
       if (blocks === 0) {
         break
       }
@@ -313,15 +313,56 @@ class Niklas {
     }
   }
 
+  private handleFromTo () {
+    if (this.peek() === 'from') {
+      this.get()
+      const from = this.evaluate()
+      if (typeof from !== 'number') {
+        throw new Error('Expression after from must be a number')
+      }
+      if (this.get() !== 'to') {
+        throw new Error('After from must follow a to')
+      }
+      const to = this.evaluate()
+      if (typeof to !== 'number') {
+        throw new Error('Expression after to must be a number')
+      }
+      let variable
+      if (this.peek() === 'with') {
+        this.get()
+        variable = this.get()
+      }
+      if (this.get() !== '{') {
+        throw new Error('From-To-Loop must have a body')
+      }
+      const tokens = this.collectBlock()
+      for (let i = from; i < to; i++) {
+        const niklas = new Niklas()
+        if (variable) {
+          niklas.addVariable(true, variable, 'number', i)
+        }
+        niklas.parent = this
+        niklas.tokens = [...tokens]
+        niklas.execute(true)
+      }
+      return true
+    }
+  }
+
   private isVariableKeyword () {
     if (['var', 'val'].includes(this.peek())) {
       const final = this.get() === 'val'
       const name = this.get()
+      let returnType = null
+      if (this.peek() === ':') {
+        this.get()
+        returnType = this.get()
+      }
       if (this.get() !== '=') {
         throw new Error('Variable declaration is missing \'=\'')
       }
       const eval2 = this.evaluate()
-      this.addVariable(final, name, 'any', eval2)
+      this.addVariable(final, name, returnType as any, eval2)
       return true
     }
   }
@@ -516,18 +557,39 @@ class Niklas {
       if (variable.type === 'function') {
         return this.callFunction(variable as FunctionVariable)
       }
-      let result = variable.value
-      if (this.peek(tokens) === '++') {
+      let result = variable.value;
+      if (this.peek(tokens) === '=') {
+        this.get()
+        this.checkFinal(variable)
+        result = this.evaluate(tokens)
+        this.checkTypeCompatibility(variable.type, result)
+        variable.value = result
+      } else if (this.peek(tokens) === '++') {
         this.get(tokens)
+        this.checkFinal(variable)
         variable.value = variable.value + 1
-      }
-      if (this.peek(tokens) === '--') {
+      } else if (this.peek(tokens) === '--') {
         this.get(tokens)
+        this.checkFinal(variable)
         variable.value = variable.value - 1
       }
       return result
     }
     throw new Error('Unknown start of factor: ' + this.peek(tokens))
+  }
+
+  /* Utilities */
+
+  checkFinal (variable: Variable) {
+    if (variable.final) {
+      throw new Error('ConstantError: A constant\'s value may not change!')
+    }
+  }
+
+  checkTypeCompatibility (type: VariableType, variable: any) {
+    if (type && typeof variable !== type) {
+      throw new Error('TypeError: ' + type + ' is not compatible to ' + typeof variable)
+    }
   }
 }
 
