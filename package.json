@@ -1,6 +1,6 @@
 {
   "name": "@lukasnehrke/niklas",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Programming Language for Beginners.",
   "license": "MIT",
   "author": "Lukas Nehrke <lukas.nehrke@gmail.com>",
@@ -8,9 +8,6 @@
   "files": [
     "lib"
   ],
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
-  },
   "devDependencies": {
     "@types/jest": "^26.0.15",
     "jest": "^26.6.0",
