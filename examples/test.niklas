@@ -1,1 +1,14 @@
-log(1337)
+var x = 7
+x = 4
+
+def test (x: number) {
+  if (x == 7 && true) {
+    return 7
+  } else if (x == 8) {
+    return 8
+  } else {
+    return 1
+  }
+}
+
+println(test(x))

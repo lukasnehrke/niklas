@@ -13,7 +13,12 @@ def multiply (param1: number, param2: number): number {
 def fib (n: number) {
   if (n == 1 || n == 2) {
     return 1
+  } else if (n == 8) {
+    return 2
+  } else {
+    return 3
   }
+  return 4
 }
 
 // Test some multiplications
@@ -22,4 +27,4 @@ assert multiply(5,5) == 25
 assert multiply(32,32) == 1024
 assert multiply(112, 69) == 112*69
 
-fib(8)
+println(fib(8))
