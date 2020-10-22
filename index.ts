@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-const regex = /({|}|\/\*|\*\/|\/\/.*|\n|:|==|=|\*|\/|%|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
+const regex = /({|}|\/\*|\*\/|\/\/.*|\n|:|<|==|\+\+|=|\*|\/|%|&&|\|\||,|\(|\)|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)/g
 
 type VariableType = ('any'|'number'|'string'|'function')
 
@@ -99,9 +99,11 @@ class Niklas {
       keywords: [
         this.handleComment,
         this.handleAssert,
+        this.handleRepeat,
+        this.handleWhile,
+        this.isConditionalKeyword,
         this.isVariableKeyword,
         this.handleFunctionDeclaration,
-        this.isConditionalKeyword,
         this.isStatementKeyword
       ]
     }
@@ -199,12 +201,12 @@ class Niklas {
 
   /* Tokens */
 
-  private peek () {
-    return this.tokens[0]
+  private peek (tokens = this.tokens) {
+    return tokens[0]
   }
 
-  private get () {
-    return this.tokens.shift()!
+  private get (tokens = this.tokens) {
+    return tokens.shift()!
   }
 
   private skipBlock () {
@@ -241,109 +243,6 @@ class Niklas {
     return tokens
   }
 
-  /* Expressions */
-
-  private getFactor (): any {
-    if (this.peek() === '!') {
-      this.get()
-      const result = this.getFactor()
-      if (typeof result !== 'boolean') {
-        throw new Error('NOT-Operator (!) can only be applied to booleans')
-      }
-      return !result
-    }
-    if (this.peek() === '-') {
-      this.get()
-      const result = this.getFactor()
-      if (typeof result !== 'number') {
-        throw new Error('Minus-Operator (-) can only be applied to numbers')
-      }
-      return -result
-    }
-    if (this.peek() === '(') {
-      this.get()
-      const result = this.evaluate()
-      if (this.get() !== ')') {
-        throw new Error('A parenthese is not closed')
-      }
-      return result
-    }
-    if (this.isBoolean()) {
-      return this.get() === 'true'
-    }
-    if (this.isNumber()) {
-      return parseInt(this.get())
-    }
-    if (this.isLetter()) {
-      const name = this.get()
-      const variable = this.getVariable(name)
-      if (!variable) {
-        throw new Error('Unknown variable ' + name)
-      }
-      if (variable.type === 'function') {
-        const result = this.callFunction(variable as FunctionVariable)
-        return result
-      }
-      return variable.value
-    }
-    throw new Error('Unknown start of factor: ' + this.peek())
-  }
-
-  private getExpression (): any {
-    const left = this.getFactor()
-    if (this.peek() === '*') {
-      this.get()
-      return left * this.getExpression()
-    }
-    if (this.peek() === '/') {
-      this.get()
-      return left / this.getExpression()
-    }
-    if (this.peek() === '%') {
-      this.get()
-      return left % this.getExpression()
-    }
-    return left
-  }
-
-  private evaluateSimpleExpression (): any {
-    const left = this.getExpression()
-    if (this.peek() === '==') {
-      this.get()
-      return left == this.getExpression()
-    }
-    if (this.peek() === '<') {
-      this.get()
-      return left < this.getExpression()
-    }
-    if (this.peek() === '>') {
-      this.get()
-      return left > this.getExpression()
-    }
-    return left
-  }
-
-  private evaluate (): any {
-    let value;
-    if (this.peek() === '(') {
-      this.get()
-      value = this.evaluate()
-      if (this.peek() === ')') {
-        this.get()
-      }
-    } else {
-      value = this.evaluateSimpleExpression()
-    }
-    if (this.peek() === '&&') {
-      this.get()
-      value = (value && this.evaluate())
-    } else if (this.peek() === '||') {
-      this.get()
-      value = (value || this.evaluate())
-    }
-    return value
-  }
-
   /* Handlers */
 
   private handleComment () {
@@ -371,6 +270,50 @@ class Niklas {
       const condition = this.evaluate()
       if (!condition) {
         throw new Error('Assertion failed')
+      }
+      return true
+    }
+  }
+
+  private handleRepeat () {
+    if (this.peek() === 'repeat') {
+      this.get()
+      const x = this.evaluate()
+      if (typeof x !== 'number') {
+        throw new Error('Argument after repeat must be of type number')
+      }
+      if (this.get() !== '{') {
+        throw new Error('After repeat must follow a block')
+      }
+      const tokens = this.collectBlock()
+      for (let i = 0; i < x; i++) {
+        const niklas = new Niklas()
+        niklas.parent = this
+        niklas.tokens = [...tokens]
+        niklas.execute(true)
+      }
+      return true
+    }
+  }
+
+  private handleWhile () {
+    if (this.peek() === 'while') {
+      this.get()
+      const conditionTokens = []
+      while (this.tokens.length) {
+        if (this.peek() === '{') {
+          this.get()
+          break
+        }
+        conditionTokens.push(this.get())
+      }
+      const tokens = this.collectBlock()
+      let condition
+      while (condition = this.evaluate([...conditionTokens])) {
+        const niklas = new Niklas()
+        niklas.parent = this
+        niklas.tokens = [...tokens]
+        niklas.execute(true)
       }
       return true
     }
@@ -487,16 +430,110 @@ class Niklas {
     return true
   }
 
-  private isBoolean () {
-    return ['true', 'false'].includes(this.peek())
+  /* Expressions */
+
+  private evaluate (tokens = this.tokens): any {
+    let value;
+    if (this.peek(tokens) === '(') {
+      this.get(tokens)
+      value = this.evaluate(tokens)
+      if (this.peek(tokens) === ')') {
+        tokens.shift()
+      }
+    } else {
+      const left = this.getExpression(tokens)
+      if (this.peek(tokens) === '==') {
+        this.get(tokens)
+        return left == this.getExpression(tokens)
+      } else if (this.peek(tokens) === '<') {
+        this.get(tokens)
+        return left < this.getExpression(tokens)
+      } else if (this.peek(tokens) === '>') {
+        this.get(tokens)
+        value = left > this.getExpression(tokens)
+      } else {
+        value = left
+      }
+    }
+    if (this.peek(tokens) === '&&') {
+      this.get(tokens)
+      value = (value && this.evaluate(tokens))
+    } else if (this.peek(tokens) === '||') {
+      this.get(tokens)
+      value = (value || this.evaluate(tokens))
+    }
+    return value
   }
 
-  private isNumber () {
-    return '0123456789'.includes(this.peek()[0])
+  private getExpression (tokens = this.tokens): any {
+    const left = this.getFactor(tokens)
+    if (this.peek(tokens) === '*') {
+      this.get(tokens)
+      return left * this.getExpression(tokens)
+    }
+    if (this.peek(tokens) === '/') {
+      this.get(tokens)
+      return left / this.getExpression(tokens)
+    }
+    if (this.peek(tokens) === '%') {
+      this.get(tokens)
+      return left % this.getExpression(tokens)
+    }
+    return left
   }
 
-  private isLetter () {
-    return 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.includes(this.peek()[0])
+  private getFactor (tokens = this.tokens): any {
+    if (this.peek(tokens) === '!') {
+      this.get(tokens)
+      const result = this.getFactor(tokens)
+      if (typeof result !== 'boolean') {
+        throw new Error('NOT-Operator (!) can only be applied to booleans')
+      }
+      return !result
+    }
+    if (this.peek(tokens) === '-') {
+      this.get(tokens)
+      const result = this.getFactor(tokens)
+      if (typeof result !== 'number') {
+        throw new Error('Minus-Operator (-) can only be applied to numbers')
+      }
+      return -result
+    }
+    if (this.peek(tokens) === '(') {
+      this.get(tokens)
+      const result = this.evaluate(tokens)
+      if (this.get(tokens) !== ')') {
+        throw new Error('A parenthese is not closed')
+      }
+      return result
+    }
+    if (['true', 'false'].includes(this.peek(tokens))) {
+      return this.get(tokens) === 'true'
+    }
+    if ('0123456789'.includes(this.peek(tokens)[0])) {
+      return parseInt(this.get(tokens))
+    }
+    if ('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.includes(this.peek(tokens)[0])) {
+      const name = this.get(tokens)
+      const variable = this.getVariable(name)
+      if (!variable) {
+        throw new Error('Unknown variable ' + name)
+      }
+      if (variable.type === 'function') {
+        return this.callFunction(variable as FunctionVariable)
+      }
+      let result = variable.value
+      if (this.peek(tokens) === '++') {
+        this.get(tokens)
+        variable.value = variable.value + 1
+      }
+      if (this.peek(tokens) === '--') {
+        this.get(tokens)
+        variable.value = variable.value - 1
+      }
+      return result
+    }
+    throw new Error('Unknown start of factor: ' + this.peek(tokens))
   }
 }
 

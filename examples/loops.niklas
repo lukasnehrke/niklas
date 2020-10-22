@@ -1,0 +1,12 @@
+// Loops in Niklas.
+
+repeat (3) {
+  log(123)
+}
+
+var x = 0
+while (x < 5) {
+  x++
+}
+
+log(x)
