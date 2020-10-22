@@ -244,10 +244,6 @@ class Niklas {
   /* Handlers */
 
   private handleComment () {
-    if (this.peek() === '\n') {
-      this.get()
-      return true
-    }
     if (this.peek() === '/*') {
       while (this.tokens.length) {
         if (this.get() === '*/') {
