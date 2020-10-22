@@ -71,22 +71,20 @@ class Niklas {
     this.tokens = []
     this.memory = {
       variables: {
-        log: {
+        println: {
           final: true,
           native: true,
-          name: 'log',
           type: 'function',
           value: {
             parameters: [],
             body: (params: any) => {
-              console.log(params)
+              console.log(...params)
             }
           }
         },
         runJS: {
           final: true,
           native: true,
-          name: 'runJS',
           type: 'function',
           value: {
             parameters: [],
