@@ -14,4 +14,7 @@ if (!fs.existsSync(loc)) {
 const file = fs.readFileSync(loc, 'utf8')
 
 const interpreter = new niklas.Niklas()
-interpreter.run(file)
+interpreter.delay = 1000
+interpreter.run(file).catch(err => {
+  console.error('Niklas failed with errors:', err)
+})

@@ -1,14 +1,28 @@
-var x = 7
-x = 4
-
-def test (x: number) {
-  if (x == 7 && true) {
-    return 7
-  } else if (x == 8) {
-    return 8
-  } else {
-    return 1
-  }
+def test (z) {
+  return z*2
 }
 
-println(test(x))
+val x = 4
+
+assert test(test(test(4))) == 32
+
+if (x == 5) {
+  println("condition!")
+} else if (x == 4) {
+  println("elseif!")
+} else {
+  println("else!")
+}
+
+println(2)
+
+/*
+ * Multiplies two numbers.
+ */
+def multiply (param1: number, param2: number): number {
+  val result = param1 * param2
+  println(param1, param2, result)
+  return result
+}
+
+multiply(2, 2)

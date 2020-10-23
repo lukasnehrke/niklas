@@ -1,0 +1,23 @@
+println("Hello World!")
+
+def fib (n: number) {
+  if (n == 1 || n == 2) {
+    return 1
+  } else {
+    return fib(n - 1) + fib(n - 2)
+  }
+}
+
+assert fib(10) == 55
+
+var x = 5
+val y = (x + 7)
+
+from 0 to y with i {
+  println(i * 2)
+}
+
+while (x == 5 || y == 2) {
+  x++
+  y--
+}
