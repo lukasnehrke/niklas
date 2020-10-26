@@ -62,102 +62,50 @@ interface NativeFunctionVariable extends FunctionVariable {
 
 class Niklas {
 
-  public readonly memory: Memory
-  private tokens: string[]
-  private parent?: Niklas
+  private readonly parent?: Niklas
+  public readonly memory: Memory = { variables: {}, handlers: [] }
 
   public delay: number = 0
   public row: number = 0
   public offset: number = 0
   public depth: number = 0
 
-  constructor () {
-    this.tokens = []
-    this.memory = {
-      variables: {
-        println: {
-          final: true,
-          native: true,
-          type: 'function',
-          value: {
-            parameters: [],
-            body: (params: any) => {
-              console.log(...params)
-            }
-          }
-        },
-        runJS: {
-          final: true,
-          native: true,
-          type: 'function',
-          value: {
-            parameters: [],
-            body: (params: any) => {
-              return eval(params[0])
-            }
-          }
-        }
-      },
-      handlers: [
-        { name: 'comment', test: this.handleComment },
-        { name: 'assert', test: this.handleAssert },
-        { name: 'repeat', test: this.handleRepeat },
-        { name: 'while', test: this.handleWhile },
-        { name: 'fromTo', test: this.handleFromTo },
-        { name: 'condition', test: this.handleCondition },
-        { name: 'variableDeclaration', test: this.handleVariableDeclaration },
-        { name: 'functionDeclaration', test: this.handleFunctionDeclaration },
-        { name: 'statement', test: this.handleStatement }
-      ]
+  private tokens: string[] = []
+
+  constructor (parent?: Niklas) {
+    this.parent = parent
+    if (!this.parent) {
+      this.registerDefaultHandlers()
+      this.registerDefaultFunctions()
     }
   }
 
-  public run (source: String) {
-    this.tokens = source.split(regex).filter(token => token.trim())
+  public run (source: string|string[]) {
+    if (Array.isArray(source)) {
+      this.tokens = source
+    } else {
+      this.tokens = source.split(regex).filter(token => token.trim())
+    }
     return this.execute()
   }
 
-  private async execute () {
-    while (this.tokens.length) {
-      if (this.peek() === '}') {
-        break
-      }
-      if (this.peek() === 'return') {
-        if (!this.parent) {
-          throw new Error('Invalid return statement')
-        }
-        this.get()
-        return await this.evaluate()
-      }
-      let found = false
-      for (const handler of this.memory.handlers) {
-        try {
-          let shouldContinue = false
-          const returnValue = await handler.test.call(this, () => shouldContinue = true)
-          if (returnValue) {
-            return returnValue
-          }
-          if (!shouldContinue) {
-            found = true
-            break
-          }
-        } catch (err) {
-          return Promise.reject('Error in handler \'' + handler.name + '\': ' + err)
-        }
-      }
-      if (!found) {
-        return Promise.reject('Could handle token ' + this.peek())
-      }
-      if (this.delay) {
-        await new Promise(resolve => setTimeout(resolve, this.delay))
+  public addHandler (handler: Handler) {
+    return this.memory.handlers.push(handler)
+  }
+
+  public addFunction (name: string, parameters: string[], body: (params: any) => any) {
+    return this.memory.variables[name] = {
+      final: true,
+      type: 'function',
+      value: {
+        parameters,
+        body
       }
     }
   }
 
-  /* Operations */
-
   public addVariable (final: boolean, name: string, type: string, value: any) {
-    this.memory.variables[name] = {
+    return this.memory.variables[name] = {
       final: final,
       type: type,
       value: value
@@ -170,6 +118,43 @@ class Niklas {
       return this.parent.getVariable(name)
     }
     return res
+  }
+
+  protected async execute () {
+    while (this.tokens.length) {
+      if (this.peek() === '}') {
+        break
+      }
+      if (this.peek() === 'return') {
+        if (!this.parent) {
+          throw new Error('Invalid return statement')
+        }
+        this.get()
+        return await this.evaluate()
+      }
+      let found = false
+      for (const handler of this.getRoot().memory.handlers) {
+        try {
+          let shouldContinue = false
+          const returnValue = await handler.test.call(this, () => shouldContinue = true)
+          if (returnValue) {
+            return returnValue
+          }
+          if (!shouldContinue) {
+            found = true
+            break
+          }
+        } catch (err) {
+          return Promise.reject(err)
+        }
+      }
+      if (!found) {
+        return Promise.reject('Could handle unknown token ' + this.peek())
+      }
+      if (this.delay) {
+        await new Promise(resolve => setTimeout(resolve, this.delay))
+      }
+    }
   }
 
   async callFunction (tokens = this.tokens, fun: FunctionVariable) {
@@ -199,20 +184,47 @@ class Niklas {
         throw new Error('Parameter ' + param.name + ' must be of type ' + param.type + ', but was ' + type)
       }
     }
-    if (fun.native) {
+    if (typeof fun.value.body === 'function') {
       return (fun as NativeFunctionVariable).value.body(params)
     }
-    const niklas = new Niklas()
-    niklas.parent = this
-    niklas.tokens = [...fun.value.body as any]
+    const niklas = new Niklas(this)
     for (let i = 0; i < params.length; i++) {
       niklas.addVariable(true, fun.value.parameters[i].name, fun.value.parameters[i].type, params[i])
     }
     try {
-      return await niklas.execute()
+      return await niklas.run([...fun.value.body as any])
     } catch (err) {
       return Promise.reject('Could not execute function: ' + err)
     }
+  }
+
+  protected registerDefaultFunctions () {
+    this.addFunction('print', [], (params) => console.log(...params))
+    this.addFunction('checkNotNull', [], (params) => {
+      if (params[0] === null || params[0] === undefined) {
+        throw new Error('checkNotNull: ' + params[1] || 'The provided value was null')
+      }
+    })
+    this.addFunction('checkArgument', [], (params) => {
+      if (typeof params[0] === 'boolean') {
+        throw new Error('First parameter of checkArgument must be a boolean!')
+      }
+      if (params[0] === false) {
+        throw new Error('checkArgument: ' + params[1] || 'The provided value was false')
+      }
+    })
+  }
+
+  protected registerDefaultHandlers () {
+    this.addHandler({ name: 'comment', test: this.handleComment })
+    this.addHandler({ name: 'assert', test: this.handleAssert })
+    this.addHandler({ name: 'repeat', test: this.handleRepeat })
+    this.addHandler({ name: 'while', test: this.handleWhile })
+    this.addHandler({ name: 'fromTo', test: this.handleFromTo })
+    this.addHandler({ name: 'condition', test: this.handleCondition })
+    this.addHandler({ name: 'variableDeclaration', test: this.handleVariableDeclaration })
+    this.addHandler({ name: 'functionDeclaration', test: this.handleFunctionDeclaration })
+    this.addHandler({ name: 'statement', test: this.handleStatement })
   }
 
   /* Handlers */
@@ -258,10 +270,8 @@ class Niklas {
     }
     const tokens = this.collectBlock()
     for (let i = 0; i < x; i++) {
-      const niklas = new Niklas()
-      niklas.parent = this
-      niklas.tokens = [...tokens]
-      const result = await niklas.execute()
+      const niklas = new Niklas(this)
+      const result = await niklas.run([...tokens])
       if (result) {
         return result
       }
@@ -285,10 +295,8 @@ class Niklas {
     const tokens = this.collectBlock()
     let condition
     while (condition = await this.evaluate([...conditionTokens])) {
-      const niklas = new Niklas()
-      niklas.parent = this
-      niklas.tokens = [...tokens]
-      const returnValue = await niklas.execute()
+      const niklas = new Niklas(this)
+      const returnValue = await niklas.run([...tokens])
       if (returnValue) {
         return returnValue
       }
@@ -322,13 +330,11 @@ class Niklas {
     }
     const tokens = this.collectBlock()
     for (let i = from; i < to; i++) {
-      const niklas = new Niklas()
+      const niklas = new Niklas(this)
       if (variable) {
         niklas.addVariable(true, variable, 'number', i)
       }
-      niklas.parent = this
-      niklas.tokens = [...tokens]
-      const returnType = await niklas.execute()
+      const returnType = await niklas.run([...tokens])
       if (returnType) {
         return returnType
       }
@@ -347,10 +353,8 @@ class Niklas {
         throw new Error('If-Block must begin with a brace {')
       }
       if (condition) {
-        const niklas = new Niklas()
-        niklas.parent = this
-        niklas.tokens = this.collectBlock()
-        const returnValue = await niklas.execute()
+        const niklas = new Niklas(this)
+        const returnValue = await niklas.run(this.collectBlock())
         if (returnValue) {
           return returnValue
         }
@@ -366,13 +370,12 @@ class Niklas {
           if (this.get() !== '{') {
             throw new Error('Else-Block must begin with a brace {')
           }
-          const niklas = new Niklas()
-          niklas.parent = this
-          niklas.tokens = this.collectUntil(this.tokens, '{', '}')
+          const niklas = new Niklas(this)
+          const tokens = this.collectUntil(this.tokens, '{', '}')
           if (this.get() !== '}') {
             throw new Error('Else-Block must end with a brace }')
           }
-          const returnValue = await niklas.execute()
+          const returnValue = await niklas.run(tokens)
           if (returnValue) {
             return returnValue
           }
@@ -674,6 +677,13 @@ class Niklas {
   }
 
   /* Utilities */
+
+  protected getRoot (): Niklas {
+    if (!this.parent) {
+      return this
+    }
+    return this.parent.getRoot()
+  }
 
   protected checkFinal (variable: Variable) {
     if (variable.final) {

@@ -3,7 +3,7 @@
  */
 def multiply (param1: number, param2: number): number {
   val result = param1 * param2
-  println(param1, param2, result)
+  print(param1, param2, result)
   return result
 }
 

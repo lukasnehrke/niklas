@@ -7,21 +7,21 @@ val x = 4
 assert test(test(test(4))) == 32
 
 if (x == 5) {
-  println("condition!")
+  print("condition!")
 } else if (x == 4) {
-  println("elseif!")
+  print("elseif!")
 } else {
-  println("else!")
+  print("else!")
 }
 
-println(2)
+print(2)
 
 /*
  * Multiplies two numbers.
  */
 def multiply (param1: number, param2: number): number {
   val result = param1 * param2
-  println(param1, param2, result)
+  print(param1, param2, result)
   return result
 }
 
