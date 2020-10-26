@@ -66,10 +66,8 @@ class Niklas {
   public readonly memory: Memory = { variables: {}, handlers: [] }
   public readonly parent?: Niklas
 
-  public delay: number = -1
   public row: number = 0
   public offset: number = 0
-
   public tokens: string[] = []
 
   constructor (parent?: Niklas) {
@@ -77,7 +75,7 @@ class Niklas {
     if (!this.parent) {
       this.registerDefaultHandlers()
       this.registerDefaultFunctions()
-      this.delay = 0
+      this.addVariable(false, 'delay', 'number', 0)
     } else {
       this.depth = this.parent.depth + 1
     }
@@ -154,8 +152,9 @@ class Niklas {
       if (!found) {
         return Promise.reject('Could handle unknown token ' + this.peek())
       }
-      if (this.getDelay() > 0) {
-        await new Promise(resolve => setTimeout(resolve, this.delay))
+      const delay = this.getVariable('delay').value
+      if (delay > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
   }
@@ -686,13 +685,6 @@ class Niklas {
       return this
     }
     return this.parent.getRoot()
-  }
-
-  protected getDelay (): number {
-    if (this.delay >= 0) {
-      return this.delay
-    }
-    return this.parent!.getDelay()
   }
 
   protected checkFinal (variable: Variable) {
