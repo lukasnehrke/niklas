@@ -122,6 +122,7 @@ class Niklas {
   }
 
   protected async execute () {
+    let applyDelay = !!this.parent
     while (this.tokens.length) {
       if (this.peek() === '}') {
         break
@@ -132,6 +133,14 @@ class Niklas {
         }
         this.get()
         return await this.evaluate()
+      }
+      if (applyDelay) {
+        const delay = this.getVariable('delay').value
+        if (delay > 0) {
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      } else {
+        applyDelay = true
       }
       let found = false
       for (const handler of this.getRoot().memory.handlers) {
@@ -151,10 +160,6 @@ class Niklas {
       }
       if (!found) {
         return Promise.reject('Could handle unknown token ' + this.peek())
-      }
-      const delay = this.getVariable('delay').value
-      if (delay > 0) {
-        await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
   }
@@ -537,6 +542,7 @@ class Niklas {
     if (this.peek(tokens) === '!') {
       this.get(tokens)
       const result = await this.getFactor(tokens)
+      console.log('result', result)
       if (typeof result !== 'boolean') {
         return Promise.reject('NOT-Operator (!) can only be applied to booleans')
       }
