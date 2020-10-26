@@ -62,21 +62,24 @@ interface NativeFunctionVariable extends FunctionVariable {
 
 class Niklas {
 
-  private readonly parent?: Niklas
+  public readonly depth: number = 0
   public readonly memory: Memory = { variables: {}, handlers: [] }
+  public readonly parent?: Niklas
 
-  public delay: number = 0
+  public delay: number = -1
   public row: number = 0
   public offset: number = 0
-  public depth: number = 0
 
-  private tokens: string[] = []
+  public tokens: string[] = []
 
   constructor (parent?: Niklas) {
     this.parent = parent
     if (!this.parent) {
       this.registerDefaultHandlers()
       this.registerDefaultFunctions()
+      this.delay = 0
+    } else {
+      this.depth = this.parent.depth + 1
     }
   }
 
@@ -151,7 +154,7 @@ class Niklas {
       if (!found) {
         return Promise.reject('Could handle unknown token ' + this.peek())
       }
-      if (this.delay) {
+      if (this.getDelay() > 0) {
         await new Promise(resolve => setTimeout(resolve, this.delay))
       }
     }
@@ -683,6 +686,13 @@ class Niklas {
       return this
     }
     return this.parent.getRoot()
+  }
+
+  protected getDelay (): number {
+    if (this.delay >= 0) {
+      return this.delay
+    }
+    return this.parent!.getDelay()
   }
 
   protected checkFinal (variable: Variable) {
